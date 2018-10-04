@@ -1,7 +1,19 @@
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import matplotlib.path as mpath
+from math import sin,cos,pi
+from scipy.interpolate import spline
 import numpy as np
+from scipy import optimize
+
+"""
+class Point:
+    x=0;y=0
+    def __init__(self,x,y):
+        self.x = x
+        self.y = y
+class Line: 
+"""
 
 patches = []
 
@@ -29,11 +41,11 @@ def create_HollowSLine():
     path = mpath.Path
     path_data = [
         (path.MOVETO,[0,0]),
-        (path.CURVE4, [2, 2]),
-        (path.CURVE4, [4, -2]),
+        (path.CURVE4, [2, 3]),
+        (path.CURVE4, [4, -3]),
         (path.CURVE4, [6, 0]),
-        (path.CURVE4, [4, -1.5]),
-        (path.CURVE4, [2, 2.5]),
+        (path.CURVE4, [4, -2.5]),
+        (path.CURVE4, [2, 3.5]),
         (path.CURVE4, [0, 0])
     ]
     codes,verts = zip(*path_data)
@@ -42,6 +54,7 @@ def create_HollowSLine():
     return patch
 
 
+"""
 def create_HollowHelix():
     path = mpath.Path
     path_data = [
@@ -67,14 +80,29 @@ def create_HollowHelix():
         (path.CURVE4, [8, -7]),
         (path.CURVE4, [10, 0]),
         (path.CURVE4, [11, 4])
-
     ]
     codes, verts = zip(*path_data)
     path = mpath.Path(verts, codes)
     patch = mpatches.PathPatch(path, fill=False)
     return patch
+"""
 
-# def create_star():
+
+def create_HollowHelix():
+    plt.subplot(111,polar=True)
+    plt.ylim([0,30])
+    N = 4
+    theta = np.arange(0,N*np.pi,np.pi/100)
+    plt.plot(theta,theta*2)
+    plt.show()
+    #X = [0,2,0,-2.6,0,4,3,0,-4,-6,-5,-3,0,3,6,9,7,4,1,-2,-4,-4,-3,-1,1,3,1,0]
+    #Y = [0,1,2.4,0,-3.14,0,3,4.78,3,0,-4,-5,-6,-5,-3,0,-1,-3,-4,-4,-2,0,2,3,3,1,0,0]
+    #plt.plot(X, Y)
+    #plt.show()
+    #XNew = np.linspace(X.min(),X.max(),300)
+    #YNew = spline(X,Y,XNew)
+    #plt.plot(XNew,YNew)
+    #plt.show()
 
 
 
@@ -101,13 +129,7 @@ if __name__ == '__main__':
     show_shape(c)
     c=create_HollowSLine()
     show_shape(c)
-    c=create_HollowHelix()
-    show_shape(c)
-
-    #plt.axis('equal')
-    #plt.axis('on')
-    #plt.tight_layout()
-    #plt.show()
+    create_HollowHelix()
 
 
 
