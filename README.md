@@ -1,2 +1,2 @@
-# Visual-Cluster-Seperation
+# Learning Visual Clustering
 CSUVAG_Project
