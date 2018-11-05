@@ -14,7 +14,6 @@ def dcmp(x):
     else:
         return -1
 
-
 def draw_skeleton(pxlist, pylist):
     """
 
@@ -26,10 +25,96 @@ def draw_skeleton(pxlist, pylist):
     plt.show()
 
 
+def gen_distribution(cluster_density, cluster_distribution, pxlist, pylist, central_point):
+    vx = []
+    vy = []
+    cx = central_point[0]
+    cy = central_point[1]
+    tot = len(pxlist)
+    cnt = random.randint(100, 300)
+    for k in range(300):
+        i = int(random.uniform(0, tot))
+        # vecx = float(pxlist[i] - cx)
+        vecx = float(cx - pxlist[i])
+        # vecy = float(pylist[i] - cy)
+        vecy = float(cy - pylist[i])
+        num = random.randint(0, 10)
+        for j in range(num):
+            t = random.uniform(0, 1)
+            vx.append(cx + 1.0*t*vecx)
+            t = random.uniform(0, 1)
+            vy.append(cy + 1.0*t*vecy)
+    return vx, vy
+
+
 def getdist(x1, y1, x2, y2):
     return math.sqrt((x1 - x2) * (x1 - x2) + (y1 - y2) * (y1 - y2))
 
-def get_noise_effect(pxlist, pylist, noise_amount, noise_width):
+def get_final_position(px, py, vx, vy, noise_amount, noise_width, central_point):
+    """
+
+    :rtype: Coordinates of points affected by noise points
+    :param px: The original x-coordinate of the point
+    :param py: The original y-coordinate of the point
+    :param vx: The x-coordinates of the noise point set
+    :param vy: The y-coordinates of the noise point set
+    :param noise_amount: The number of the noise points
+    """
+    """
+    Find the coordinates for the equilibrium position
+    Using methods similar to gradient descent
+    F1 = k1*q1*q2/r/r
+    F2 = -k2*x
+    The result is poor, so try to take a new approach
+    The original point moves a certain distance to the noise point
+    depending on the distance from the noise point
+    the farther it is, the smaller the distance you move
+    """
+    now_x = px
+    now_y = py
+    noise_width *= 2.0
+    k = float(noise_width * noise_width) / (4.0 * noise_width * noise_width - 1.0)
+    b = 1.0-4.0*k
+    cx = central_point[0]
+    cy = central_point[1]
+    delta_x = 0
+    delta_y = 0
+    for i in range(noise_amount):
+        d = getdist(vx[i], vy[i], px, py)
+        d2 = getdist(vx[i], vy[i], cx, cy)
+        force = k/(1.0*d*d) + b
+        # if dcmp(d2-d) > 0:
+        #     force -=0.1
+        alpha = math.atan2(vy[i]-py, vx[i]-px)
+        delta_x += force*math.cos(alpha)
+        delta_y += force*math.sin(alpha)
+        """
+        tx = force*math.cos(alpha)
+        if tx < 0:
+            delta_x += max(tx, d*math.cos(alpha))
+        else:
+            delta_x += min(tx, d*math.cos(alpha))
+        ty = force*math.sin(alpha)
+        if ty < 0:
+            delta_y += max(ty, d*math.sin(alpha))
+        else:
+            delta_y += min(ty, d*math.sin(alpha))
+        """
+    print("delta_x: ", delta_x)
+    print("delta_y: ", delta_y)
+    move_dis = math.sqrt(delta_x*delta_x + delta_y*delta_y)
+    for i in range(noise_amount):
+        td = getdist(now_x, now_y, vx[i], vy[i])
+        if move_dis > td:
+            move_dis = td
+            delta_x = vx[i] - now_x
+            delta_y = vy[i] - now_y
+    now_x += delta_x
+    now_y += delta_y
+    return now_x, now_y
+
+
+def get_noise_effect(pxlist, pylist, noise_amount, noise_width, central_point):
     """
     
     :param pxlist: The x-coordinate of the set of points
@@ -48,12 +133,14 @@ def get_noise_effect(pxlist, pylist, noise_amount, noise_width):
     tot = len(pxlist)
     noise_sum_x = 0
     noise_sum_y = 0
+    cx = central_point[0]
+    cy = central_point[1]
     for i in range(noise_amount):
-        pos = random.randint(0, tot)
+        pos = random.randint(0, tot-1)
         pos2 = (pos+1)%tot
-        if pxlist[pos] == pxlist[pos2]:  #  斜率不存在
+        if pxlist[pos] == pxlist[pos2]:  #  斜率不存在, 水平移动
             dir = random.choice([-1, 1])
-            delta = random.uniform(0, noise_width)
+            delta = random.uniform(min(0.5, noise_width), max(0.5, noise_width))
             noise_x.append(pxlist[pos]+dir*delta)
             noise_y.append(pylist[pos])
         else:  # 斜率存在，在法线方向
@@ -61,32 +148,51 @@ def get_noise_effect(pxlist, pylist, noise_amount, noise_width):
             norm_x = 1.0/math.sqrt(1.0+norm_k*norm_k)
             norm_y = norm_k/math.sqrt(1.0+norm_k*norm_k)
             dir = random.choice([-1, 1])
-            delta = random.uniform(0, noise_width)
+            delta = random.uniform(min(0.5, noise_width), max(0.5, noise_width))
             noise_x.append(pxlist[pos]+dir*norm_x*delta)
             noise_y.append(pylist[pos]+dir*norm_y*delta)
         noise_sum_x += noise_x[i]
         noise_sum_y += noise_y[i]
+
     for i in range(tot):
-        new_x = pxlist[i]
-        new_y = pylist[i]
-        delta_x = 0
-        delta_y = 0
+        pxlist[i], pylist[i] = get_final_position(pxlist[i], pylist[i], noise_x, noise_y, noise_amount, noise_width, central_point)
+        """
+        sumx = 0
+        sumy = 0
         for j in range(noise_amount):
-            dis = getdist(noise_x[j], noise_y[j], pxlist[i], pylist[i])
-            force = 1/(dis*dis)
-            delta_x += force*math.fabs(math.cos((noise_y[j]-pylist[i])/(noise_x[j]-pxlist[i])))
-            delta_y += force*math.fabs(math.sin((noise_y[j]-pylist[i])/(noise_x[j]-pxlist[i])))
-        pxlist[i] += delta_x
-        pylist[i] += delta_y
-
-
-    # for i in range(tot):
-    #     pxlist[i] = float((pxlist[i]+noise_sum_x))/(noise_amount+1)
-    #     pylist[i] = float((pylist[i]+noise_sum_y))/(noise_amount+1)
+            d = getdist(pxlist[i], pylist[i], noise_x[j], noise_y[j])
+            vecx = noise_x[j] - pxlist[i]
+            vecy = noise_y[j] - pylist[i]
+            beta = math.atan2(vecy, vecx)
+            sumx += math.cos(math.atan2(vecy, vecx))*0.5*float((noise_width-d))/noise_width
+            sumy += math.sin(math.atan2(vecy, vecx))*0.5*float((noise_width-d))/noise_width
+            # sumx += math.cos(math.atan2(vecy, vecx))*0.3*float((noise_width*noise_width-d*d))/(noise_width*noise_width)
+            # sumy += math.sin(math.atan2(vecy, vecx))*0.3*float((noise_width*noise_width-d*d))/(noise_width*noise_width)
+        pxlist[i] += sumx
+        pylist[i] += sumy
+        """
+    """
+    for i in range(tot):
+    new_x = pxlist[i]
+    new_y = pylist[i]
+    delta_x = 0
+    delta_y = 0
+    for j in range(noise_amount):
+        dis = getdist(noise_x[j], noise_y[j], pxlist[i], pylist[i])
+        force = 1/(dis*dis)
+        delta_x += force*math.fabs(math.cos((noise_y[j]-pylist[i])/(noise_x[j]-pxlist[i])))
+        delta_y += force*math.fabs(math.sin((noise_y[j]-pylist[i])/(noise_x[j]-pxlist[i])))
+    pxlist[i] += delta_x
+    pylist[i] += delta_y
+    """
     for i in range(noise_amount):
         pxlist.append(noise_x[i])
         pylist.append(noise_y[i])
+    # for i in range(tot):
+    #     pxlist[i] = float((pxlist[i]+noise_sum_x))/(noise_amount+1)
+    #     pylist[i] = float((pylist[i]+noise_sum_y))/(noise_amount+1)
     return pxlist, pylist
+
 
 def draw_circle_skeleton(cluseter_angle, cluster_area, cluster_density,
                          cluster_distribution, noise_amount, noise_width, central_point):
@@ -98,7 +204,7 @@ def draw_circle_skeleton(cluseter_angle, cluster_area, cluster_density,
     :param central_point: [float, float]
     """
     """
-        (x-a)^2 + (y-b)^2 = r;
+        (x-a)^2 + (y-b)^2 = r^2;
         pi*r*r = cluster_area --> r = sqrt(cluster_area/pi)
         x = a + r*sin(sita)
         y = b + r*cos(sita)
@@ -122,12 +228,16 @@ def draw_circle_skeleton(cluseter_angle, cluster_area, cluster_density,
         pxlist.append(new_x)
         pylist.append(new_y)
         circle_sets.append(point)
-    pxlist, pylist = get_noise_effect(pxlist, pylist, noise_amount, noise_width)
     draw_skeleton(pxlist, pylist)
+    pxlist, pylist = get_noise_effect(pxlist, pylist, noise_amount, noise_width, central_point)
+    draw_skeleton(pxlist, pylist)
+    # pxlist, pylist = gen_distribution(cluster_density, cluster_distribution, pxlist, pylist, central_point)
+    # draw_skeleton(pxlist, pylist)
     return circle_sets
 
 
-def draw_oval_skeleton(cluster_area, cluster_angle, central_point):
+def draw_oval_skeleton(cluster_angle, cluster_area, cluster_density,
+                       cluster_distribution, noise_amount, noise_width, central_point):
     """
 
     :rtype: list point sets skeleton
@@ -165,6 +275,10 @@ def draw_oval_skeleton(cluster_area, cluster_angle, central_point):
         pylist.append(new_y)
         oval_sets.append(point)
     draw_skeleton(pxlist, pylist)
+    pxlist, pylist = get_noise_effect(pxlist, pylist, noise_amount, noise_width)
+    draw_skeleton(pxlist, pylist)
+    pxlist, pylist = gen_distribution(cluster_density, cluster_distribution, pxlist, pylist, central_point)
+    draw_skeleton(pxlist, pylist)
     return oval_sets
 
 
@@ -191,7 +305,8 @@ def gettriangleperimeter(x1, y1, x2, y2, x3, y3):
            getdist(x3, y3, x1, y1)
 
 
-def draw_triangle_skeleton(cluster_area, cluster_angle, central_point):
+def draw_triangle_skeleton(cluster_angle, cluster_area, cluster_density,
+                           cluster_distribution, noise_amount, noise_width, central_point):
     """
 
     :rtype: list point sets skeleton
@@ -245,6 +360,7 @@ def draw_triangle_skeleton(cluster_area, cluster_angle, central_point):
             pylist.append(new_y)
             triangle_sets.append(point)
     print(len(pxlist), len(pylist))
+    pxlist, pylist = get_noise_effect(pxlist, pylist, noise_amount, noise_width)
     draw_skeleton(pxlist, pylist)
     return triangle_sets
     # plt.plot(vx, vy)
@@ -273,7 +389,8 @@ def getpolygonarea(vx, vy):
     return sum*0.5
 
 
-def draw_polygon_skeleton(num_vertex, cluster_area, cluster_angle, central_point):
+def draw_polygon_skeleton(num_vertex, cluster_angle, cluster_area, cluster_density,
+                          cluster_distribution, noise_amount, noise_width, central_point):
     """
 
     :rtype: list point sets skeleton
@@ -293,10 +410,10 @@ def draw_polygon_skeleton(num_vertex, cluster_area, cluster_angle, central_point
     vx = []
     vy = []
     totangle = 2 * math.pi
-    minangle = 5.0 / 360.0 * totangle
+    minangle = 20.0 / 360.0 * totangle
     pre = 0
     for i in range(num_vertex - 1):
-        sita = random.uniform(min(minangle, totangle / 2.0), totangle / 2.0)
+        sita = random.uniform(min(minangle, 2.0 * totangle / 3.0), 2.0 * totangle / 3.0)
         totangle -= sita
         vx.append(r * math.cos(pre + sita))
         vy.append(r * math.sin(pre + sita))
@@ -334,15 +451,22 @@ def draw_polygon_skeleton(num_vertex, cluster_area, cluster_angle, central_point
     C = getpolygonperimeter(vx, vy)
     for i in range(num_vertex):
         step_num = int(
-            float(getdist(vx[i], vy[i], vx[(i + 1) % num_vertex], vy[(i + 1) % num_vertex])) / float(C) * 200)
+            float(getdist(vx[i], vy[i], vx[(i + 1) % num_vertex], vy[(i + 1) % num_vertex])) / float(C) * 300)
+        print("i: ", i)
+        print("dist: ", getdist(vx[i], vy[i], vx[(i + 1) % num_vertex], vy[(i + 1) % num_vertex]))
+        print("step_num: ", step_num)
         for j in range(step_num):
-            new_x = vx[i] + 1.0 * j / step_num * (vx[(i + 1) % num_vertex] - vx[i])
-            new_y = vy[i] + 1.0 * j / step_num * (vy[(i + 1) % num_vertex] - vy[i])
+            new_x = vx[i] + 1.0 * j * (vx[(i + 1) % num_vertex] - vx[i]) / float(step_num)
+            new_y = vy[i] + 1.0 * j * (vy[(i + 1) % num_vertex] - vy[i]) / float(step_num)
             point = [new_x, new_y]
             pxlist.append(new_x)
             pylist.append(new_y)
             polygon_sets.append(point)
     print(len(pxlist), len(pylist))
+    draw_skeleton(pxlist, pylist)
+    pxlist, pylist = get_noise_effect(pxlist, pylist, noise_amount, noise_width)
+    draw_skeleton(pxlist, pylist)
+    pxlist, pylist = gen_distribution(cluster_density, cluster_distribution, pxlist, pylist, central_point)
     draw_skeleton(pxlist, pylist)
     return polygon_sets
     # plt.plot(vx, vy)
@@ -372,26 +496,37 @@ def gen_region_cluster_skeleton(cluster_type, cluster_shape, cluster_angle,
         points_sets = draw_circle_skeleton(cluster_angle, cluster_area, cluster_density,
                                            cluster_distribution, noise_amount, noise_width, central_point)
     elif cluster_shape == 2:
-        points_sets = draw_oval_skeleton(cluster_area, cluster_angle, central_point)
+        points_sets = draw_oval_skeleton(cluster_angle, cluster_area, cluster_density,
+                                         cluster_distribution, noise_amount, noise_width, central_point)
     elif cluster_shape == 3:
-        points_sets = draw_polygon_skeleton(3, cluster_area, cluster_angle, central_point)
-        # points_sets = draw_triangle_skeleton(cluster_area, cluster_angle, central_point)
+        points_sets = draw_polygon_skeleton(3, cluster_angle, cluster_area, cluster_density,
+                                            cluster_distribution, noise_amount, noise_width, central_point)
     elif cluster_shape == 4:
-        points_sets = draw_polygon_skeleton(4, cluster_area, cluster_angle, central_point)
+        points_sets = draw_polygon_skeleton(4, cluster_angle, cluster_area, cluster_density,
+                                            cluster_distribution, noise_amount, noise_width, central_point)
     elif cluster_shape == 5:
-        points_sets = draw_polygon_skeleton(5, cluster_area, cluster_angle, central_point)
+        points_sets = draw_polygon_skeleton(5, cluster_angle, cluster_area, cluster_density,
+                                            cluster_distribution, noise_amount, noise_width, central_point)
     elif cluster_shape == 6:
-        points_sets = draw_polygon_skeleton(6, cluster_area, cluster_angle, central_point)
+        points_sets = draw_polygon_skeleton(6, cluster_angle, cluster_area, cluster_density,
+                                            cluster_distribution, noise_amount, noise_width, central_point)
     return points_sets
+
 
 
 if __name__ == '__main__':
     # cluster_type, cluster_shape, cluster_angle,
     # cluster_area, cluster_density, cluster_distribution,
     # noise_amount, noise_width, central_point
-    for i in range(5):
-        points_sets = gen_region_cluster_skeleton(2, 1, 10, 30, 10, 1, 1, 3, [0, 0])
-    # points_sets = gen_region_cluster_skeleton(2, 2, 30, 45, 10, 1, 1, 5, [0, 0])
-    # points_sets = gen_region_cluster_skeleton(2, 3, 20, 30, 10, 1, 1, 5, [5, 5])
-    # points_sets = gen_region_cluster_skeleton(2, 4, 20, 50, 10, 1, 1, 5, [5, 6])
-    pass
+    for i in range(10):
+        points_sets = gen_region_cluster_skeleton(2, 1, 10, 30, 10, 1, 10, 5, [0, 0])
+    # for i in range(5):
+    #     points_sets = gen_region_cluster_skeleton(2, 2, 30, 45, 10, 1, 10, 5, [0, 0])
+    # for i in range(15):
+    #     points_sets = gen_region_cluster_skeleton(2, 3, 20, 30, 10, 1, 10, 5, [5, 5])
+    # for i in range(5):
+    #     points_sets = gen_region_cluster_skeleton(2, 4, 20, 50, 10, 1, 10, 5, [5, 6])
+    # for i in range(5):
+    #     points_sets = gen_region_cluster_skeleton(2, 5, 20, 50, 10, 1, 10, 5, [5, 6])
+    # for i in range(5):
+    #     points_sets = gen_region_cluster_skeleton(2, 6, 20, 50, 10, 1, 10, 5, [5, 6])
